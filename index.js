@@ -18,6 +18,14 @@ const lessons = [
   { id: 10, subject: "Psychology", location: "San Jose", price: 29, spaces: 5 },
 ];
 
+app.get('', (req, res) => {
+  res.send(`Server is running on port ${port}`);
+});
+
+app.get('/lessons', (req, res) => {
+  res.json(lessons);
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
