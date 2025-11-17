@@ -29,6 +29,27 @@ app.get('/lessons', (req, res) => {
   res.json(lessons);
 });
 
+app.put('/lessons/:id/spaces', (req, res) => {
+  const id = Number(req.params.id);
+  const { spaces } = req.body;
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid lesson id' });
+  }
+
+  if (typeof spaces !== 'number' || !Number.isInteger(spaces) || spaces < 0) {
+    return res.status(400).json({ error: '`spaces` must be a non-negative integer' });
+  }
+
+  const lesson = lessons.find((l) => l.id === id);
+  if (!lesson) {
+    return res.status(404).json({ error: 'Lesson not found' });
+  }
+
+  lesson.spaces = spaces;
+  res.json(lesson);
+});
+
 app.post('/orders', (req, res) => {
   const { checkoutForm, cart } = req.body;
 
