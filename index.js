@@ -18,12 +18,43 @@ const lessons = [
   { id: 10, subject: "Psychology", location: "San Jose", price: 29, spaces: 5 },
 ];
 
+const orders = [];
+let nextOrderId = 1;
+
 app.get('', (req, res) => {
   res.send(`Server is running on port ${port}`);
 });
 
 app.get('/lessons', (req, res) => {
   res.json(lessons);
+});
+
+app.post('/orders', (req, res) => {
+  const { checkoutForm, cart } = req.body;
+
+  if (!checkoutForm || !Array.isArray(cart)) {
+    return res.status(400).json({ error: 'Request body must include `checkoutForm` and `cart` array' });
+  }
+
+  const total = cart.reduce((sum, item) => {
+    const price = typeof item.price === 'number' ? item.price : 0;
+    const qty = typeof item.quantity === 'number' ? item.quantity : (typeof item.qty === 'number' ? item.qty : 1);
+    return sum + price * qty;
+  }, 0);
+
+  const order = {
+    id: nextOrderId++,
+    checkoutForm,
+    cart,
+    total,
+  };
+
+  orders.push(order);
+  res.status(201).json(order);
+});
+
+app.get('/orders', (req, res) => {
+  res.json(orders);
 });
 
 app.listen(port, () => {
