@@ -1,83 +1,129 @@
 const express = require('express');
+const { MongoClient } = require('mongodb');
+const dns = require('dns');
 const app = express();
 
-const port = 3000;
+if (process.env.MONGODB_DNS_SERVERS) {
+  try {
+    const servers = process.env.MONGODB_DNS_SERVERS.split(',').map(s => s.trim()).filter(Boolean);
+    if (servers.length) {
+      dns.setServers(servers);
+      console.log('Using custom DNS servers for Node resolver:', servers);
+    }
+  } catch (err) {
+    console.warn('Failed to set custom DNS servers:', err.message || err);
+  }
+}
+
+const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-const lessons = [
-  { id: 1, subject: "Mathematics", location: "New York", price: 25, spaces: 5 },
-  { id: 2, subject: "Physics", location: "Los Angeles", price: 30, spaces: 8 },
-  { id: 3, subject: "Chemistry", location: "Chicago", price: 28, spaces: 6 },
-  { id: 4, subject: "Biology", location: "Houston", price: 27, spaces: 7 },
-  { id: 5, subject: "English", location: "Philadelphia", price: 22, spaces: 10 },
-  { id: 6, subject: "History", location: "Phoenix", price: 20, spaces: 12 },
-  { id: 7, subject: "Computer Science", location: "San Antonio", price: 35, spaces: 4 },
-  { id: 8, subject: "Art", location: "San Diego", price: 24, spaces: 9 },
-  { id: 9, subject: "Music", location: "Dallas", price: 26, spaces: 6 },
-  { id: 10, subject: "Psychology", location: "San Jose", price: 29, spaces: 5 },
-];
+const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://akhtarsalmaan0:akhtarsalmaan0@labs.tyokjdi.mongodb.net/?appName=LABS';
 
-const orders = [];
-let nextOrderId = 1;
+const client = new MongoClient(mongoUri);
 
-app.get('', (req, res) => {
-  res.send(`Server is running on port ${port}`);
-});
+let lessonsCol;
+let ordersCol;
 
-app.get('/lessons', (req, res) => {
-  res.json(lessons);
-});
+async function startServer() {
+  try {
+    await client.connect();
+    const db = client.db('Coursework');
+    lessonsCol = db.collection('Lessons');
+    ordersCol = db.collection('Orders');
 
-app.put('/lessons/:id/spaces', (req, res) => {
-  const id = Number(req.params.id);
-  const { spaces } = req.body;
+    console.log('Connected to MongoDB');
 
-  if (!Number.isInteger(id) || id <= 0) {
-    return res.status(400).json({ error: 'Invalid lesson id' });
+    app.get('/', (req, res) => res.send(`Server is running on port ${port}`));
+
+    app.get('/lessons', async (req, res) => {
+      try {
+        const docs = await lessonsCol.find({}).toArray();
+        res.json(docs);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch lessons' });
+      }
+    });
+
+    app.put('/lessons/:id/spaces', async (req, res) => {
+      const idParam = req.params.id;
+      const { spaces } = req.body;
+
+      if (typeof spaces !== 'number' || !Number.isInteger(spaces) || spaces < 0) {
+        return res.status(400).json({ error: '`spaces` must be a non-negative integer' });
+      }
+
+      try {
+        let filter;
+        const numericId = Number(idParam);
+        if (Number.isInteger(numericId) && numericId > 0) {
+          filter = { id: numericId };
+        } else if (/^[0-9a-fA-F]{24}$/.test(idParam)) {
+          const { ObjectId } = require('mongodb');
+          filter = { _id: new ObjectId(idParam) };
+        } else {
+          filter = { id: idParam };
+        }
+
+        await lessonsCol.updateOne(filter, { $set: { spaces } });
+        const updated = await lessonsCol.findOne(filter);
+        if (!updated) return res.status(404).json({ error: 'Lesson not found' });
+        return res.json(updated);
+      } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Failed to update spaces' });
+      }
+    });
+
+    app.post('/orders', async (req, res) => {
+      const { checkoutForm, cart } = req.body;
+
+      if (!checkoutForm || !Array.isArray(cart)) {
+        return res.status(400).json({ error: 'Request body must include `checkoutForm` and `cart` array' });
+      }
+
+      const total = cart.reduce((sum, item) => {
+        const price = typeof item.price === 'number' ? item.price : 0;
+        const qty = typeof item.quantity === 'number' ? item.quantity : (typeof item.qty === 'number' ? item.qty : 1);
+        return sum + price * qty;
+      }, 0);
+
+      const orderDoc = {
+        checkoutForm,
+        cart,
+        total,
+        createdAt: new Date(),
+      };
+
+      try {
+        const r = await ordersCol.insertOne(orderDoc);
+        const inserted = await ordersCol.findOne({ _id: r.insertedId });
+        res.status(201).json(inserted);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to save order' });
+      }
+    });
+
+    app.get('/orders', async (req, res) => {
+      try {
+        const all = await ordersCol.find({}).toArray();
+        res.json(all);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch orders' });
+      }
+    });
+
+    app.listen(port, () => {
+      console.log(`Server is running on port ${port}`);
+    });
+  } catch (err) {
+    console.error('Failed to connect to MongoDB', err);
+    process.exit(1);
   }
+}
 
-  if (typeof spaces !== 'number' || !Number.isInteger(spaces) || spaces < 0) {
-    return res.status(400).json({ error: '`spaces` must be a non-negative integer' });
-  }
-
-  const lesson = lessons.find((l) => l.id === id);
-  if (!lesson) {
-    return res.status(404).json({ error: 'Lesson not found' });
-  }
-
-  lesson.spaces = spaces;
-  res.json(lesson);
-});
-
-app.post('/orders', (req, res) => {
-  const { checkoutForm, cart } = req.body;
-
-  if (!checkoutForm || !Array.isArray(cart)) {
-    return res.status(400).json({ error: 'Request body must include `checkoutForm` and `cart` array' });
-  }
-
-  const total = cart.reduce((sum, item) => {
-    const price = typeof item.price === 'number' ? item.price : 0;
-    const qty = typeof item.quantity === 'number' ? item.quantity : (typeof item.qty === 'number' ? item.qty : 1);
-    return sum + price * qty;
-  }, 0);
-
-  const order = {
-    id: nextOrderId++,
-    checkoutForm,
-    cart,
-    total,
-  };
-
-  orders.push(order);
-  res.status(201).json(order);
-});
-
-app.get('/orders', (req, res) => {
-  res.json(orders);
-});
-
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+startServer();
