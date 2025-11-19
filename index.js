@@ -3,6 +3,24 @@ const { MongoClient } = require('mongodb');
 const dns = require('dns');
 const app = express();
 
+// Enable CORS so the frontend can call the API from a different origin.
+try {
+  const cors = require('cors');
+  app.use(cors());
+  console.log('CORS enabled via cors package');
+} catch (e) {
+  console.warn('`cors` package not installed — falling back to manual CORS headers');
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    if (req.method === 'OPTIONS') {
+      res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+      return res.sendStatus(200);
+    }
+    next();
+  });
+}
+
 if (process.env.MONGODB_DNS_SERVERS) {
   try {
     const servers = process.env.MONGODB_DNS_SERVERS.split(',').map(s => s.trim()).filter(Boolean);
