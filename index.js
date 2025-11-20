@@ -3,7 +3,6 @@ const { MongoClient } = require('mongodb');
 const dns = require('dns');
 const app = express();
 
-// Enable CORS so the frontend can call the API from a different origin.
 try {
   const cors = require('cors');
   app.use(cors());
@@ -57,7 +56,13 @@ async function startServer() {
 
     app.get('/lessons', async (req, res) => {
       try {
-        const docs = await lessonsCol.find({}).toArray();
+        const search = req.query.search;
+        let query = {};
+        if (search && search.trim()) {
+          const regex = new RegExp(search.trim(), 'i');
+          query = { $or: [{ subject: regex }, { location: regex }] };
+        }
+        const docs = await lessonsCol.find(query).toArray();
         res.json(docs);
       } catch (err) {
         console.error(err);
