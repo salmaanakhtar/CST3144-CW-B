@@ -20,6 +20,11 @@ try {
   });
 }
 
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
 if (process.env.MONGODB_DNS_SERVERS) {
   try {
     const servers = process.env.MONGODB_DNS_SERVERS.split(',').map(s => s.trim()).filter(Boolean);
@@ -35,6 +40,8 @@ if (process.env.MONGODB_DNS_SERVERS) {
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+
+app.use('/images', express.static('images'));
 
 const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://akhtarsalmaan0:akhtarsalmaan0@labs.tyokjdi.mongodb.net/?appName=LABS';
 
