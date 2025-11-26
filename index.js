@@ -1,6 +1,5 @@
 const express = require('express');
 const { MongoClient } = require('mongodb');
-const dns = require('dns');
 const app = express();
 
 try {
@@ -24,18 +23,6 @@ app.use((req, res, next) => {
   console.log(`${req.method} ${req.url}`);
   next();
 });
-
-if (process.env.MONGODB_DNS_SERVERS) {
-  try {
-    const servers = process.env.MONGODB_DNS_SERVERS.split(',').map(s => s.trim()).filter(Boolean);
-    if (servers.length) {
-      dns.setServers(servers);
-      console.log('Using custom DNS servers for Node resolver:', servers);
-    }
-  } catch (err) {
-    console.warn('Failed to set custom DNS servers:', err.message || err);
-  }
-}
 
 const port = process.env.PORT || 3000;
 
